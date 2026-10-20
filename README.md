@@ -123,7 +123,7 @@ pnpm db:seed
 
 # 4. Run Vite (5173) + Fastify (3000) together
 pnpm dev
-# open http://localhost:5173
+# open http://127.0.0.1:5173  (Vite binds loopback IPv4 explicitly)
 ```
 
 To run the production build locally with one process:
@@ -406,7 +406,7 @@ deployment**. Full matrix: [docs/compatibility.md](docs/compatibility.md).
 | Browser UI smoke (EN/LTR, FA/RTL, dark/light, mobile, client/config/assignment/QR/export flows) | Verified manually with headless Chrome; harness is outside the committed test suite                            |
 | Migrations + seed against PostgreSQL                                                            | Verified locally; `prisma migrate diff` reports no schema drift                                                |
 | Production dependency audit                                                                     | Verified locally: no known production vulnerabilities (`pnpm audit --prod --audit-level=high`)                 |
-| Keep-alive scheduler                                                                            | Verified in production mode: scheduled `PanahGozar-KeepAlive/1.0` request to `/api/health` returned 200         |
+| Keep-alive scheduler                                                                            | Verified in production mode: scheduled `PanahGozar-KeepAlive/1.0` request to `/api/health` returned 200        |
 | Railway and Render manifests                                                                    | Validated locally against the platforms' official JSON schemas (20 October 2026)                               |
 | Docker image build/runtime                                                                      | **Not verified** in this environment (Docker unavailable); Dockerfile/entrypoint reviewed and manifest-checked |
 | Railway deployment                                                                              | **Not performed** in this environment                                                                          |
