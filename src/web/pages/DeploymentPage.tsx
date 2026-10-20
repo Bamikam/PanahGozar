@@ -157,7 +157,7 @@ export function DeploymentPage() {
                 </a>
               </div>
               <p className="mt-3 text-[11px] text-ink-faint">
-                {t("deploy.reviewDate")}: <span className="text-ink-muted">2026-10-19</span>
+                {t("deploy.reviewDate")}: <span className="text-ink-muted">2026-10-20</span>
                 {diag?.generatedAt ? ` · ${formatDate(diag.generatedAt)}` : ""}
               </p>
             </section>

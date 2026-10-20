@@ -70,8 +70,21 @@ try {
     const vars = s.envVars ?? [];
     const dbVar = vars.find((v) => v.key === "DATABASE_URL");
     if (!dbVar?.fromDatabase) fail("DATABASE_URL must reference managed DB");
-    for (const required of ["SESSION_SECRET", "ENCRYPTION_KEY", "SETUP_TOKEN", "NODE_ENV"]) {
+    for (const required of [
+      "SESSION_SECRET",
+      "ENCRYPTION_KEY",
+      "SETUP_TOKEN",
+      "NODE_ENV",
+      "KEEP_ALIVE_ENABLED",
+      "KEEP_ALIVE_INTERVAL_MINUTES",
+    ]) {
       if (!vars.some((v) => v.key === required)) fail(`${required} env var missing`);
+    }
+    if (vars.find((v) => v.key === "KEEP_ALIVE_ENABLED")?.value !== "true") {
+      fail("render keep-alive must be enabled");
+    }
+    if (vars.find((v) => v.key === "KEEP_ALIVE_INTERVAL_MINUTES")?.value !== "3") {
+      fail("render keep-alive interval must be 3 minutes");
     }
     for (const secret of ["SESSION_SECRET", "ENCRYPTION_KEY"]) {
       const entry = vars.find((v) => v.key === secret);
@@ -132,6 +145,9 @@ try {
   if (!dockerfile.includes("RUN_MIGRATIONS_ON_START=1")) {
     fail("Docker release migration flag missing");
   }
+  if (!dockerfile.includes("KEEP_ALIVE_ENABLED=true")) {
+    fail("Docker keep-alive default missing");
+  }
   if (!dockerfile.includes("COPY --from=build --chown=node:node /app/src ./src")) {
     fail("seed sources must be available in runtime image");
   }
@@ -154,6 +170,8 @@ try {
     "SETUP_TOKEN",
     "LOG_LEVEL",
     "ENABLE_RUNTIME_LISTENERS",
+    "KEEP_ALIVE_ENABLED",
+    "KEEP_ALIVE_INTERVAL_MINUTES",
   ]) {
     if (!new RegExp(`^${key}=`, "m").test(env)) fail(`${key} missing from .env.example`);
   }

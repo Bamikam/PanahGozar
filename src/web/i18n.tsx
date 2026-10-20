@@ -481,6 +481,9 @@ const en: Record<string, string> = {
   "settings.nodeVersion": "Node.js version",
   "settings.listeners": "Protocol listeners",
   "settings.listenersOff": "Disabled (external runtimes)",
+  "settings.keepAlive": "Keep-alive self ping",
+  "settings.keepAliveOn": "Every {minutes} min",
+  "settings.keepAliveOff": "Disabled",
   "settings.installation": "Installation initialized",
   "settings.adminUsers": "Administrator accounts",
   "settings.adminUsersHint": "Create operators or viewers, deactivate accounts, and change roles.",
@@ -539,7 +542,7 @@ const en: Record<string, string> = {
   "deploy.railway": "Railway",
   "deploy.render": "Render",
   "deploy.reviewDate": "Compatibility review date",
-  "deploy.lastReviewed": "Last reviewed 19 October 2026 against current official documentation.",
+  "deploy.lastReviewed": "Last reviewed 20 October 2026 against current official documentation.",
   "deploy.railwayNotes":
     "Public networking is HTTP(S) through the platform edge. Railway can also create a manually configured TCP Proxy per service, but this repository's manifest does not enable it, and no UDP proxy is available. Protocol binaries and long-lived non-HTTP listeners are not part of this deployment.",
   "deploy.renderNotes":
@@ -1034,6 +1037,9 @@ const fa: Record<string, string> = {
   "settings.nodeVersion": "نسخه Node.js",
   "settings.listeners": "شنونده‌های پروتکل",
   "settings.listenersOff": "غیرفعال (اجرای بیرونی)",
+  "settings.keepAlive": "پینگ سلامت خودکار",
+  "settings.keepAliveOn": "هر {minutes} دقیقه",
+  "settings.keepAliveOff": "غیرفعال",
   "settings.installation": "راه‌اندازی اولیه",
   "settings.adminUsers": "حساب‌های مدیر",
   "settings.adminUsersHint":
@@ -1091,7 +1097,7 @@ const fa: Record<string, string> = {
   "deploy.railway": "Railway",
   "deploy.render": "Render",
   "deploy.reviewDate": "تاریخ بررسی سازگاری",
-  "deploy.lastReviewed": "آخرین بررسی: ۱۹ اکتبر ۲۰۲۶ بر اساس مستندات رسمی روز.",
+  "deploy.lastReviewed": "آخرین بررسی: ۲۰ اکتبر ۲۰۲۶ بر اساس مستندات رسمی روز.",
   "deploy.railwayNotes":
     "شبکه عمومی HTTP(S) از لبه پلتفرم است. Railway می‌تواند TCP Proxy دستی برای هر سرویس بسازد، اما manifest این مخزن آن را فعال نمی‌کند و پروکسی UDP ندارد. باینری پروتکل و شنونده غیر HTTP در این استقرار نیست.",
   "deploy.renderNotes":

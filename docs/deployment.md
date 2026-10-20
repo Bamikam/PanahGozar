@@ -38,6 +38,32 @@ pnpm start        # node dist/server/index.js
 Keep **one replica** while session/rate-limit storage is in-memory. A horizontally scaled
 deployment needs shared session/rate-limit infrastructure first.
 
+## Idle spin-down and keep-alive
+
+`KEEP_ALIVE_ENABLED=true` starts an in-process scheduler that requests the service's own
+`PUBLIC_URL/api/health` every `KEEP_ALIVE_INTERVAL_MINUTES` (default `3`) through the public
+entry point. This produces a real inbound edge request even when no user is visiting.
+
+- **Render:** free web services spin down after **15 minutes without inbound traffic**, have a
+  750 instance-hour monthly allowance, and free PostgreSQL expires after **30 days**. The
+  keep-alive can prevent the 15-minute idle spin-down while the process is alive, but it does
+  not remove the hour limit or database expiry. The Blueprint uses paid always-on compute and
+  PostgreSQL, so sleep is already disabled there; keep-alive is enabled as an extra guard.
+- **Railway:** Serverless (formerly App Sleeping) can sleep a service after roughly **5–10
+  minutes without outbound traffic**. Keep the setting **off** for a true always-on panel. The
+  provided Dockerfile sets `KEEP_ALIVE_ENABLED=true` and a 3-minute interval, which stays below
+  that threshold if Serverless is accidentally enabled.
+- **Generic Docker:** enabled by default by the image environment; set
+  `KEEP_ALIVE_ENABLED=false` to disable.
+
+The scheduler requests only the fixed `/api/health` path derived from validated `PUBLIC_URL`; it
+does not fetch arbitrary URLs. It stops on SIGTERM/SIGINT. It cannot wake an already sleeping
+process, guarantee 100% uptime, bypass quotas, or prevent provider maintenance. For strict
+always-on operation use a paid plan or VPS and additionally configure an external uptime
+monitor. Verify the current platform policies in the official
+[Render Free](https://render.com/docs/free) and
+[Railway Serverless](https://docs.railway.com/deployments/serverless) documentation.
+
 ## Render (Blueprint)
 
 1. Push the repository to GitHub (default branch `main` unless you edit `render.yaml`).
@@ -47,6 +73,7 @@ deployment needs shared session/rate-limit infrastructure first.
    - one managed PostgreSQL (`plan: 0.5c-1g`, PostgreSQL 17, private-network only),
    - `DATABASE_URL` wired from the database's internal connection string,
    - `SESSION_SECRET` and `ENCRYPTION_KEY` generated,
+   - keep-alive self pings every 3 minutes,
    - `SETUP_TOKEN` requested as a secret (`sync: false`).
 4. Provide `SETUP_TOKEN` when prompted and apply the Blueprint.
 5. The first deploy runs the build, then `pnpm release` in the pre-deploy phase, then starts
@@ -125,7 +152,7 @@ Config-as-Code. It configures:
 - `pnpm release` pre-deploy (migrations + seed),
 - `pnpm start`, `/api/ready` health check, restart policy and graceful overlap/draining.
 
-Per Railway's documentation reviewed on **19 October 2026**, Config-as-Code is deprecated;
+Per Railway's documentation reviewed on **20 October 2026**, Config-as-Code is deprecated;
 new services cannot opt in, and existing config-as-code files stop being read on
 **1 December 2026**. For a new service, use Option A or configure the equivalent commands in
 the dashboard. Do not rely on `railway.json` alone for a brand-new service.

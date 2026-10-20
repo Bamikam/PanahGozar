@@ -23,7 +23,9 @@ FROM base AS runtime
 ENV NODE_ENV=production \
     PORT=3000 \
     RUN_MIGRATIONS_ON_START=1 \
-    RUN_SEED_ON_START=1
+    RUN_SEED_ON_START=1 \
+    KEEP_ALIVE_ENABLED=true \
+    KEEP_ALIVE_INTERVAL_MINUTES=3
 COPY --from=build --chown=node:node /app/package.json ./package.json
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist

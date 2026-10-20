@@ -110,6 +110,9 @@ Last-admin protection prevents demoting/deactivating/deleting the final active a
 - CI runs `pnpm audit --prod --audit-level=high`; the production dependency set currently has
   no known vulnerabilities. Development-only build tooling is audited separately and is not
   shipped in the server or browser runtime.
+- The optional keep-alive scheduler can request only the fixed health path derived from the
+  validated `PUBLIC_URL`. It accepts no user-supplied URL and therefore does not introduce an
+  SSRF pivot; it sends no credentials and logs no URL values.
 
 ## Residual risks and non-goals
 

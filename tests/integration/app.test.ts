@@ -653,6 +653,12 @@ describe.skipIf(!hasTestDb)("integration: app + postgres", () => {
     expect(body.protocols.some((p: { state: string }) => p.state === "running_verified")).toBe(
       false
     );
+    expect(body.keepAlive).toMatchObject({
+      enabled: false,
+      intervalMinutes: 3,
+      method: "public-self-health-ping",
+      targetPath: "/api/health",
+    });
 
     const dashboard = await inject("GET", "/api/dashboard", { jar: adminJar });
     expect(dashboard.statusCode).toBe(200);

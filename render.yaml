@@ -35,6 +35,10 @@ services:
         sync: false # prompted on blueprint creation; one-time admin setup
       - key: ENABLE_RUNTIME_LISTENERS
         value: "false"
+      - key: KEEP_ALIVE_ENABLED
+        value: "true" # self health pings every 3 minutes prevent idle spin-down
+      - key: KEEP_ALIVE_INTERVAL_MINUTES
+        value: "3"
       - key: COOKIE_SECURE
         value: "true"
       - key: TRUST_PROXY

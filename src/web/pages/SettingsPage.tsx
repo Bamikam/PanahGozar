@@ -318,6 +318,16 @@ export function SettingsPage() {
                   }
                 />
                 <InfoRow
+                  label={t("settings.keepAlive")}
+                  value={
+                    data.runtime.keepAliveEnabled
+                      ? t("settings.keepAliveOn", {
+                          minutes: data.runtime.keepAliveIntervalMinutes,
+                        })
+                      : t("settings.keepAliveOff")
+                  }
+                />
+                <InfoRow
                   label={t("settings.installation")}
                   value={data.settings.installationComplete ? t("diag.yes") : t("diag.no")}
                 />

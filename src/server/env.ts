@@ -60,6 +60,19 @@ export const EnvSchema = (env: NodeJS.ProcessEnv) =>
       .default("true")
       .transform((v) => v === "true"),
     COOKIE_SECURE: z.enum(["auto", "true", "false"]).default("auto"),
+    // Optional keep-awake self health ping. It prevents common idle
+    // spin-downs by generating an outbound+inbound request to our own public
+    // health endpoint. It cannot guarantee platform availability.
+    KEEP_ALIVE_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    KEEP_ALIVE_INTERVAL_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(2, "KEEP_ALIVE_INTERVAL_MINUTES must be at least 2")
+      .max(14, "KEEP_ALIVE_INTERVAL_MINUTES must be at most 14")
+      .default(3),
   });
 
 export function decodeEncryptionKey(value: string): Buffer | null {
@@ -143,6 +156,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     enableRuntimeListeners: c.ENABLE_RUNTIME_LISTENERS,
     trustProxy: c.TRUST_PROXY,
     cookieSecure,
+    keepAliveEnabled: c.KEEP_ALIVE_ENABLED,
+    keepAliveIntervalMinutes: c.KEEP_ALIVE_INTERVAL_MINUTES,
     isDev: c.NODE_ENV === "development",
   };
 }

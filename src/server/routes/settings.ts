@@ -37,6 +37,8 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
         runtime: {
           publicUrl: fastify.appConfig.publicUrl,
           runtimeListenersEnabled: fastify.appConfig.enableRuntimeListeners,
+          keepAliveEnabled: fastify.appConfig.keepAliveEnabled,
+          keepAliveIntervalMinutes: fastify.appConfig.keepAliveIntervalMinutes,
           nodeEnv: fastify.appConfig.nodeEnv,
           nodeVersion: process.version,
         },

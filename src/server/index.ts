@@ -2,6 +2,7 @@ import "dotenv/config";
 import { buildApp } from "./app.js";
 import { migrateIfConfigured } from "./migrate.js";
 import { loadConfig } from "./env.js";
+import { startKeepAlive } from "./keepalive.js";
 
 /**
  * Production entry point:
@@ -20,6 +21,8 @@ async function main(): Promise<void> {
     { address, env: cfg.nodeEnv, port: cfg.port, publicUrl: cfg.publicUrl },
     "panahgozar HTTP service listening"
   );
+
+  const keepAlive = startKeepAlive(cfg, app.log);
 
   // Record capability evidence without blocking readiness or performing any
   // privileged probe. Failure is logged and exposed by /api/diagnostics.
@@ -49,6 +52,7 @@ async function main(): Promise<void> {
     }, 25_000);
     timeout.unref();
     try {
+      keepAlive?.stop();
       await app.close();
       await db.$disconnect();
       app.log.info("graceful shutdown complete");

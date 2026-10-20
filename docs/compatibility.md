@@ -1,6 +1,6 @@
 # Platform and protocol compatibility review
 
-Review date: **19 October 2026**. Scope: the single-web-service Railway/Render deployment
+Review date: **20 October 2026**. Scope: the single-web-service Railway/Render deployment
 implemented by this repository.
 
 Sources (official):
@@ -23,6 +23,10 @@ Sources (official):
   https://render.com/docs/health-checks
 - Render persistent disks:
   https://render.com/docs/disks
+- Render free instance idle spin-down, instance-hour limits and database expiry:
+  https://render.com/docs/free
+- Railway Serverless / App Sleeping idle detection:
+  https://docs.railway.com/deployments/serverless
 - Render PostgreSQL connections:
   https://render.com/docs/postgresql-creating-connecting
 - Render environment variables:
@@ -32,19 +36,20 @@ Sources (official):
 
 ## Platform findings
 
-| Capability | Railway | Render | Consequence for PanahGozar |
-| --- | --- | --- | --- |
-| Public HTTP(S) entry | Yes, one HTTP port per service; TLS at edge | Yes, one HTTP port; bind `0.0.0.0` to `PORT` | Frontend + API share one Fastify origin |
-| Arbitrary TCP ingress | Optional manually created TCP Proxy to one internal port | No public raw TCP for web services; only the HTTP port | Not enabled; protocol listeners not started |
-| Arbitrary UDP ingress | Not provided by public networking | Not provided for web services | No UDP protocols (WireGuard/OpenVPN UDP, SOCKS UDP, SS UDP) |
-| Health checks | HTTP healthcheck path | HTTP healthcheck path or TCP default | `/api/health` liveness, `/api/ready` readiness |
-| Graceful shutdown | Deployment overlap/draining settings; platform sends termination | `maxShutdownDelaySeconds`, 30 s default/max 300 | App handles SIGTERM/SIGINT, bounded 25 s |
-| Persistent filesystem | Ephemeral unless a volume is attached | Ephemeral unless a persistent disk is attached; disks require paid plans and disable zero-downtime deploys | No state is stored on disk |
-| Long-running process | One container process per deployment | One web process; no background worker in this service | No protocol daemons, no background tunnel process |
-| Managed PostgreSQL | PostgreSQL plugin, internal URL | Managed Postgres, internal URL, private-network-only allow list possible | All persistent state in PostgreSQL |
-| Secrets | Environment variables | Environment variables; `sync: false` prompts / `generateValue` | No secrets in repo; startup validation |
-| Custom domain | Supported; TCP proxy domains are separate | Supported | Set `PUBLIC_URL` explicitly when using a custom domain |
-| Config as code | `railway.json` deprecated for new services; existing legacy until **2026-12-01**; IaC via `.railway/railway.ts` | `render.yaml` Blueprint supported | `railway.json` retained for legacy; Docker/Railway dashboard path documented; Render Blueprint is active |
+| Capability            | Railway                                                                                                         | Render                                                                                                     | Consequence for PanahGozar                                                                                                  |
+| --------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Public HTTP(S) entry  | Yes, one HTTP port per service; TLS at edge                                                                     | Yes, one HTTP port; bind `0.0.0.0` to `PORT`                                                               | Frontend + API share one Fastify origin                                                                                     |
+| Arbitrary TCP ingress | Optional manually created TCP Proxy to one internal port                                                        | No public raw TCP for web services; only the HTTP port                                                     | Not enabled; protocol listeners not started                                                                                 |
+| Arbitrary UDP ingress | Not provided by public networking                                                                               | Not provided for web services                                                                              | No UDP protocols (WireGuard/OpenVPN UDP, SOCKS UDP, SS UDP)                                                                 |
+| Health checks         | HTTP healthcheck path                                                                                           | HTTP healthcheck path or TCP default                                                                       | `/api/health` liveness, `/api/ready` readiness                                                                              |
+| Graceful shutdown     | Deployment overlap/draining settings; platform sends termination                                                | `maxShutdownDelaySeconds`, 30 s default/max 300                                                            | App handles SIGTERM/SIGINT, bounded 25 s                                                                                    |
+| Persistent filesystem | Ephemeral unless a volume is attached                                                                           | Ephemeral unless a persistent disk is attached; disks require paid plans and disable zero-downtime deploys | No state is stored on disk                                                                                                  |
+| Long-running process  | One container process per deployment                                                                            | One web process; no background worker in this service                                                      | No protocol daemons, no background tunnel process                                                                           |
+| Managed PostgreSQL    | PostgreSQL plugin, internal URL                                                                                 | Managed Postgres, internal URL, private-network-only allow list possible                                   | All persistent state in PostgreSQL                                                                                          |
+| Secrets               | Environment variables                                                                                           | Environment variables; `sync: false` prompts / `generateValue`                                             | No secrets in repo; startup validation                                                                                      |
+| Custom domain         | Supported; TCP proxy domains are separate                                                                       | Supported                                                                                                  | Set `PUBLIC_URL` explicitly when using a custom domain                                                                      |
+| Config as code        | `railway.json` deprecated for new services; existing legacy until **2026-12-01**; IaC via `.railway/railway.ts` | `render.yaml` Blueprint supported                                                                          | `railway.json` retained for legacy; Docker/Railway dashboard path documented; Render Blueprint is active                    |
+| Idle lifecycle        | Serverless/App Sleeping is opt-in; when enabled it sleeps after ~5–10 min without outbound traffic              | Free web services spin down after 15 min without inbound traffic; paid instances stay available            | Optional 3-minute self-health ping is enabled in the provided configs as best-effort anti-sleep; it cannot guarantee uptime |
 
 Both platforms expose a **single public HTTP(S) endpoint** for a web service. A port being
 listened on inside the container does not automatically make it publicly routable, and neither
@@ -55,18 +60,18 @@ platform provides kernel-level VPN interfaces to ordinary containers.
 "Config in panel" means schema validation, versioning and export. "Runtime here" means a
 listener started by this application. **No protocol has runtime here.**
 
-| Protocol | Config in panel | Client artifact | Server artifact | Required ingress / transport | Runtime privileges | Persistent state | Live health verification here |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| VLESS | Yes | `vless://` URI, QR | Xray inbound JSON | TCP; optional TLS/WS/gRPC | No root required for high ports; Xray binary and external server required | External server config/certs; panel stores metadata only | Not possible here |
-| VMess | Yes | `vmess://` URI, QR | Xray inbound JSON | TCP; optional TLS/WS/gRPC | Xray binary required; no root for high ports | External server | Not possible here |
-| Trojan | Yes | `trojan://` URI, QR | Xray inbound JSON | TCP + TLS, usually 443 | Xray/implementation + certificate private key | Certificates on external server; imported profile secrets sealed | Not possible here |
-| Shadowsocks | Yes | SIP002 `ss://`, QR | Xray multi-user inbound | TCP; optional UDP (external only) | Xray or shadowsocks server; no root for high ports | External server | Not possible here |
-| SOCKS5 | Yes | `socks://`, sing-box | Xray inbound with accounts | TCP + optional UDP associate | Forward proxy process; raw TCP ingress needed | External server | Not possible here |
-| HTTP proxy | Yes | `http://` URI | Xray inbound with accounts | TCP | Forward proxy process; raw TCP ingress needed | External server | Not possible here |
-| HTTPS proxy | Yes | `https://` URI | Xray inbound with TLS cert paths | TCP + TLS | Certificate private key on external server | Certificates external | Not possible here |
-| Telegram MTProto | Yes | `tg://proxy` / `t.me/proxy` | Erlang config template | TCP, typically 443 | MTProto proxy binary/service | Secret sealed; external server holds active secret | Not possible here |
-| WireGuard | Yes | `.conf` | `wg-quick` server config with peers | **UDP**, kernel/userspace WG | Root or approved userspace implementation; UDP ingress | Server key sealed; peers/secrets in Postgres | Not possible here |
-| OpenVPN | Yes | `.ovpn` with inline user/pass | validated profile template | UDP and/or TCP; tun/tap | Root for tun, certificates, server binary | Imported profile stored in config (admin-only); credentials sealed | Not possible here |
+| Protocol         | Config in panel | Client artifact               | Server artifact                     | Required ingress / transport      | Runtime privileges                                                        | Persistent state                                                   | Live health verification here |
+| ---------------- | --------------- | ----------------------------- | ----------------------------------- | --------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------- |
+| VLESS            | Yes             | `vless://` URI, QR            | Xray inbound JSON                   | TCP; optional TLS/WS/gRPC         | No root required for high ports; Xray binary and external server required | External server config/certs; panel stores metadata only           | Not possible here             |
+| VMess            | Yes             | `vmess://` URI, QR            | Xray inbound JSON                   | TCP; optional TLS/WS/gRPC         | Xray binary required; no root for high ports                              | External server                                                    | Not possible here             |
+| Trojan           | Yes             | `trojan://` URI, QR           | Xray inbound JSON                   | TCP + TLS, usually 443            | Xray/implementation + certificate private key                             | Certificates on external server; imported profile secrets sealed   | Not possible here             |
+| Shadowsocks      | Yes             | SIP002 `ss://`, QR            | Xray multi-user inbound             | TCP; optional UDP (external only) | Xray or shadowsocks server; no root for high ports                        | External server                                                    | Not possible here             |
+| SOCKS5           | Yes             | `socks://`, sing-box          | Xray inbound with accounts          | TCP + optional UDP associate      | Forward proxy process; raw TCP ingress needed                             | External server                                                    | Not possible here             |
+| HTTP proxy       | Yes             | `http://` URI                 | Xray inbound with accounts          | TCP                               | Forward proxy process; raw TCP ingress needed                             | External server                                                    | Not possible here             |
+| HTTPS proxy      | Yes             | `https://` URI                | Xray inbound with TLS cert paths    | TCP + TLS                         | Certificate private key on external server                                | Certificates external                                              | Not possible here             |
+| Telegram MTProto | Yes             | `tg://proxy` / `t.me/proxy`   | Erlang config template              | TCP, typically 443                | MTProto proxy binary/service                                              | Secret sealed; external server holds active secret                 | Not possible here             |
+| WireGuard        | Yes             | `.conf`                       | `wg-quick` server config with peers | **UDP**, kernel/userspace WG      | Root or approved userspace implementation; UDP ingress                    | Server key sealed; peers/secrets in Postgres                       | Not possible here             |
+| OpenVPN          | Yes             | `.ovpn` with inline user/pass | validated profile template          | UDP and/or TCP; tun/tap           | Root for tun, certificates, server binary                                 | Imported profile stored in config (admin-only); credentials sealed | Not possible here             |
 
 ### Xray and sing-box
 

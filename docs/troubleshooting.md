@@ -170,6 +170,32 @@ service as running. See [compatibility.md](compatibility.md).
   separate release phase. Keep one replica if startup hooks remain enabled.
 - The container intentionally cannot host VPN/proxy listeners and exposes no UDP.
 
+## The panel still goes to sleep
+
+1. Confirm the effective setting in authenticated **Diagnostics** (`keepAlive.enabled`) or the
+   startup log line `keep-alive scheduler started`. `KEEP_ALIVE_ENABLED` must be `true` and
+   `PUBLIC_URL` must be the exact reachable public HTTPS origin, not `localhost`.
+2. Render Free spins down after 15 minutes with no inbound traffic. Keep-alive requests
+   `/api/health` every 3 minutes, but free instance-hour limits, free PostgreSQL's 30-day
+   expiry, and provider restarts still apply. Upgrade to a paid plan for genuinely always-on
+   service.
+3. Railway Serverless/App Sleeping detects outbound inactivity after roughly 5–10 minutes.
+   Turn **Serverless off** for guaranteed always-on behavior; the image's 3-minute self-ping is
+   only a fallback.
+4. **A self-ping cannot wake a process that has already been suspended** — the timer no longer
+   exists. Use an independent external uptime monitor (one request every 5–10 minutes) to wake
+   a sleeping free service.
+5. If `PUBLIC_URL` sits behind Cloudflare Access, an auth proxy, or a custom domain not yet
+   attached, the self-request may fail. Fix the public URL or disable the keep-alive and use an
+   external monitor.
+6. Do not set `KEEP_ALIVE_INTERVAL_MINUTES` above 14. The default 3 is intentionally below both
+   platform idle thresholds.
+7. Check logs for repeated `keep-alive health request failed` warnings. The app does not crash
+   when a ping fails; it retries at the next interval. Verify network egress from the service to
+   its own public domain is allowed.
+
+Keep-alive is best-effort. No application-level timer guarantees platform uptime.
+
 ## Railway-specific
 
 - Config-as-Code is deprecated for new services. Use the Dockerfile path or configure build,

@@ -129,6 +129,20 @@ export function DiagnosticsPage() {
                     )
                   }
                 />
+                <InfoRow
+                  label={t("settings.keepAlive")}
+                  value={
+                    report.keepAlive?.enabled ? (
+                      <span className="badge-ok">
+                        {t("settings.keepAliveOn", {
+                          minutes: formatNumber(report.keepAlive.intervalMinutes),
+                        })}
+                      </span>
+                    ) : (
+                      <span className="badge-neutral">{t("settings.keepAliveOff")}</span>
+                    )
+                  }
+                />
                 <InfoRow label={t("diag.model")} value={report.deploymentModel ?? "—"} />
               </dl>
             </section>
@@ -255,7 +269,7 @@ export function DiagnosticsPage() {
               </div>
               <p className="mt-2 text-xs text-ink-muted">
                 {t("diag.reviewed", {
-                  date: report.compatibilityReview?.reviewedAt ?? "2026-10-19",
+                  date: report.compatibilityReview?.reviewedAt ?? "2026-10-20",
                 })}
               </p>
               <ul className="mt-3 space-y-1.5">

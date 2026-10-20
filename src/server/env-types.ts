@@ -11,5 +11,7 @@ export interface AppConfig {
   enableRuntimeListeners: boolean;
   trustProxy: boolean;
   cookieSecure: boolean;
+  keepAliveEnabled: boolean;
+  keepAliveIntervalMinutes: number;
   isDev: boolean;
 }

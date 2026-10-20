@@ -45,6 +45,9 @@ API**, backed by PostgreSQL.
   machine-readable and visible in the UI.
 - Polished responsive UI with English LTR and Persian RTL, dark/light themes, keyboard
   navigation, loading/empty/error states, QR codes, and no fabricated usage statistics.
+- Optional fixed-path self-health keep-alive (every 3 minutes) to counter idle spin-down on
+  free/Serverless hosting; enabled in the provided Docker/Render configurations and honestly
+  documented as best-effort, not an uptime guarantee.
 - PostgreSQL schema with Prisma migrations, indexes, foreign keys, soft deletion, audit
   events, runtime capability/health records and application settings.
 - Railway, Render, Docker, GitHub Actions and OpenAPI 3.1 support.
@@ -161,24 +164,52 @@ There is no default password, no seeded administrator, and no credentials in the
 All variables are documented in [.env.example](.env.example). Validation happens at startup
 with Zod; invalid configuration fails fast without echoing secret values.
 
-| Variable                   | Required         | Notes                                                                                                                                         |
-| -------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`                 | yes (prod)       | `development`, `test`, `production`                                                                                                           |
-| `PORT`                     | platform         | Binds `0.0.0.0`; Railway/Render assign it                                                                                                     |
-| `PUBLIC_URL`               | auto or explicit | Used in subscription URLs. Auto-derived from `RENDER_EXTERNAL_URL` / `RAILWAY_PUBLIC_DOMAIN` when omitted. Set explicitly for custom domains. |
-| `DATABASE_URL`             | yes              | PostgreSQL URL; prefer the platform-internal URL                                                                                              |
-| `SESSION_SECRET`           | yes              | >= 32 random chars, no known placeholder                                                                                                      |
-| `ENCRYPTION_KEY`           | yes              | 32 bytes as 64 hex chars or base64 (Render `generateValue` is supported)                                                                      |
-| `SETUP_TOKEN`              | optional         | Empty disables HTTP setup. >= 16 chars if set.                                                                                                |
-| `LOG_LEVEL`                | optional         | Pino level, default `info`                                                                                                                    |
-| `ENABLE_RUNTIME_LISTENERS` | optional         | Diagnostics only; no listener implementation exists                                                                                           |
-| `TRUST_PROXY`              | optional         | Default true behind platform proxies                                                                                                          |
-| `COOKIE_SECURE`            | optional         | `auto` (HTTPS => Secure), `true`, `false`                                                                                                     |
-| `RUN_MIGRATIONS_ON_START`  | optional         | Docker/Railway last-resort startup migration                                                                                                  |
-| `RUN_SEED_ON_START`        | optional         | Docker/Railway idempotent reference-data seed                                                                                                 |
+| Variable                      | Required         | Notes                                                                                                                                         |
+| ----------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                    | yes (prod)       | `development`, `test`, `production`                                                                                                           |
+| `PORT`                        | platform         | Binds `0.0.0.0`; Railway/Render assign it                                                                                                     |
+| `PUBLIC_URL`                  | auto or explicit | Used in subscription URLs. Auto-derived from `RENDER_EXTERNAL_URL` / `RAILWAY_PUBLIC_DOMAIN` when omitted. Set explicitly for custom domains. |
+| `DATABASE_URL`                | yes              | PostgreSQL URL; prefer the platform-internal URL                                                                                              |
+| `SESSION_SECRET`              | yes              | >= 32 random chars, no known placeholder                                                                                                      |
+| `ENCRYPTION_KEY`              | yes              | 32 bytes as 64 hex chars or base64 (Render `generateValue` is supported)                                                                      |
+| `SETUP_TOKEN`                 | optional         | Empty disables HTTP setup. >= 16 chars if set.                                                                                                |
+| `LOG_LEVEL`                   | optional         | Pino level, default `info`                                                                                                                    |
+| `ENABLE_RUNTIME_LISTENERS`    | optional         | Diagnostics only; no listener implementation exists                                                                                           |
+| `TRUST_PROXY`                 | optional         | Default true behind platform proxies                                                                                                          |
+| `COOKIE_SECURE`               | optional         | `auto` (HTTPS => Secure), `true`, `false`                                                                                                     |
+| `RUN_MIGRATIONS_ON_START`     | optional         | Docker/Railway last-resort startup migration                                                                                                  |
+| `RUN_SEED_ON_START`           | optional         | Docker/Railway idempotent reference-data seed                                                                                                 |
+| `KEEP_ALIVE_ENABLED`          | optional         | Best-effort idle-prevention self health ping; enabled in Docker/Render configs                                                                |
+| `KEEP_ALIVE_INTERVAL_MINUTES` | optional         | Ping interval; default `3`, allowed `2..14` minutes                                                                                           |
 
 Never commit real values. Change `ENCRYPTION_KEY` only with a planned credential rotation:
 existing sealed credentials become unreadable.
+
+### Idle spin-down and keep-alive
+
+Some free or Serverless hosting plans suspend a web service after a period without traffic.
+This repository adds an optional **public self health ping**:
+
+- Every `KEEP_ALIVE_INTERVAL_MINUTES` (default `3`) the Node process requests its own
+  `PUBLIC_URL/api/health` through the public edge.
+- Only that fixed health path is used. The URL is derived from validated `PUBLIC_URL`; there is
+  no user-controlled URL fetch, so this does not add an SSRF surface.
+- Three minutes is deliberately below Railway Serverless's ~5-minute outbound-idle threshold
+  and Render Free's 15-minute inbound-idle threshold.
+- The feature is enabled in [render.yaml](render.yaml) and the [Dockerfile](Dockerfile); it is
+  disabled by default in `.env.example` so local development does not generate pointless traffic.
+
+**This is best-effort, not an uptime guarantee.** A sleeping process cannot wake itself, so the
+ping only prevents idle sleep while the process is still running. It cannot bypass provider
+quotas, maintenance, restarts, or free-database expiry. For genuinely always-on service, use a
+paid always-on plan or a VPS, and keep Railway Serverless/App Sleeping disabled. This is exactly
+what the current paid Render Blueprint does; the self-ping is defence-in-depth for free or
+Serverless configurations. An external uptime monitor can provide an additional independent
+wake signal.
+
+Render Free also expires PostgreSQL 30 days after creation; keep-alive does not change that.
+See the official [Render Free limitations](https://render.com/docs/free) and
+[Railway Serverless behaviour](https://docs.railway.com/deployments/serverless).
 
 ## Testing
 
@@ -249,7 +280,7 @@ one public HTTP domain.
 Config-as-Code. It sets the RAILPACK builder, frozen-lockfile build, `pnpm release` pre-deploy
 (migrations + seed), `pnpm start`, and a `/api/ready` health check.
 
-> Railway documentation (reviewed 19 October 2026) marks Config-as-Code deprecated: existing
+> Railway documentation (reviewed 20 October 2026) marks Config-as-Code deprecated: existing
 > services keep reading `railway.json` until the **1 December 2026** cutoff, while **new
 > services cannot opt in**. For a new service, use the Dockerfile path above and configure
 > the start/pre-deploy commands in the dashboard if you build with Railpack instead:
@@ -333,7 +364,7 @@ using in-memory rate limiting.
 
 ## Compatibility review
 
-Reviewed on **19 October 2026** against official documentation:
+Reviewed on **20 October 2026** against official documentation:
 
 - Railway public networking specs and limits:
   [docs.railway.com/networking/public-networking/specs-and-limits](https://docs.railway.com/networking/public-networking/specs-and-limits)
@@ -348,6 +379,10 @@ Reviewed on **19 October 2026** against official documentation:
   [render.com/docs/health-checks](https://render.com/docs/health-checks)
 - Render persistent disks and ephemeral filesystems:
   [render.com/docs/disks](https://render.com/docs/disks)
+- Render Free idle spin-down, instance-hour limits and free PostgreSQL expiry:
+  [render.com/docs/free](https://render.com/docs/free)
+- Railway Serverless / App Sleeping idle detection:
+  [docs.railway.com/deployments/serverless](https://docs.railway.com/deployments/serverless)
 - Render PostgreSQL connections and connection limits:
   [render.com/docs/postgresql-creating-connecting](https://render.com/docs/postgresql-creating-connecting)
 
@@ -363,7 +398,7 @@ deployment**. Full matrix: [docs/compatibility.md](docs/compatibility.md).
 | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Prettier format check                                                                           | Verified locally                                                                                               |
 | TypeScript server/web typecheck                                                                 | Verified locally                                                                                               |
-| Unit tests                                                                                      | Verified locally: 46 passed                                                                                    |
+| Unit tests                                                                                      | Verified locally: 51 passed                                                                                    |
 | Security tests                                                                                  | Verified locally: 8 passed (in-memory Prisma stub)                                                             |
 | Integration tests with PostgreSQL 18                                                            | Verified locally: 14 passed                                                                                    |
 | Production build (single deployable)                                                            | Verified locally                                                                                               |
@@ -371,6 +406,7 @@ deployment**. Full matrix: [docs/compatibility.md](docs/compatibility.md).
 | Browser UI smoke (EN/LTR, FA/RTL, dark/light, mobile, client/config/assignment/QR/export flows) | Verified manually with headless Chrome; harness is outside the committed test suite                            |
 | Migrations + seed against PostgreSQL                                                            | Verified locally; `prisma migrate diff` reports no schema drift                                                |
 | Production dependency audit                                                                     | Verified locally: no known production vulnerabilities (`pnpm audit --prod --audit-level=high`)                 |
+| Keep-alive scheduler                                                                            | Verified in production mode: scheduled `PanahGozar-KeepAlive/1.0` request to `/api/health` returned 200         |
 | Railway and Render manifests                                                                    | Validated locally against the platforms' official JSON schemas (20 October 2026)                               |
 | Docker image build/runtime                                                                      | **Not verified** in this environment (Docker unavailable); Dockerfile/entrypoint reviewed and manifest-checked |
 | Railway deployment                                                                              | **Not performed** in this environment                                                                          |

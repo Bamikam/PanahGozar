@@ -106,6 +106,13 @@ export async function protocolRoutes(fastify: FastifyInstance): Promise<void> {
         databaseReachable: dbOk,
         allMigrationsApplied: await fastify.services.capabilities.migrationsApplied(),
         runtimeListenersEnabled: fastify.appConfig.enableRuntimeListeners,
+        keepAlive: {
+          enabled: fastify.appConfig.keepAliveEnabled,
+          intervalMinutes: fastify.appConfig.keepAliveIntervalMinutes,
+          method: "public-self-health-ping",
+          targetPath: "/api/health",
+          note: "Best-effort idle prevention; hosting plan limits and platform restarts still apply.",
+        },
         deploymentModel:
           "Single web service: panel HTTP serving + Fastify API. Protocol listeners are external by design.",
         checksSummary: {
@@ -117,13 +124,15 @@ export async function protocolRoutes(fastify: FastifyInstance): Promise<void> {
         supportedProtocols: protocolIds,
         protocols: statuses,
         compatibilityReview: {
-          reviewedAt: "2026-10-19",
+          reviewedAt: "2026-10-20",
           sources: [
             "https://docs.railway.com/networking/public-networking/specs-and-limits.md",
             "https://docs.railway.com/networking/tcp-proxy.md",
+            "https://docs.railway.com/deployments/serverless.md",
             "https://render.com/docs/web-services.md",
             "https://render.com/docs/health-checks.md",
             "https://render.com/docs/disks.md",
+            "https://render.com/docs/free.md",
           ],
         },
       };

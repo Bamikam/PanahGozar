@@ -199,6 +199,13 @@ export interface DiagnosticReportDTO {
   migrationsApplied?: boolean;
   allMigrationsApplied: boolean;
   runtimeListenersEnabled?: boolean;
+  keepAlive?: {
+    enabled: boolean;
+    intervalMinutes: number;
+    method: string;
+    targetPath: string;
+    note: string;
+  };
   deploymentModel?: string;
   checksSummary: {
     total: number;
@@ -237,6 +244,8 @@ export interface SettingsResponse {
   runtime: {
     publicUrl: string;
     runtimeListenersEnabled: boolean;
+    keepAliveEnabled: boolean;
+    keepAliveIntervalMinutes: number;
     nodeEnv: string;
     nodeVersion: string;
   };
