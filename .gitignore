@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+dist-web/
+*.tsbuildinfo
+
+# Vite
+.vite/
+
+# Environment — never commit real configuration
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Secrets / keys
+*.pem
+*.key
+*.ovpn
+secrets/
+
+# Prisma
+prisma/*.db
+
+# Test + coverage
+coverage/
+.vitest-cache/
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Local test tooling and database data
+.tools/
+.data/

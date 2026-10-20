@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": [
+    "src/server/**/*.ts",
+    "src/shared/**/*.ts",
+    "tests/**/*.ts",
+    "prisma/**/*.ts",
+    "scripts/**/*.ts",
+    "vitest.config.ts",
+    "vite.config.ts"
+  ]
+}

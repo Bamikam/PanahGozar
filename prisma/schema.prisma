@@ -1,0 +1,326 @@
+// PanahGozar — Prisma schema (PostgreSQL)
+// All persistent application state lives here. No container-local files are
+// used as a source of truth; platforms with ephemeral filesystems are safe.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- lookup ---
+
+enum ProtocolCategory {
+  xray_proxy // served by Xray cores: VLESS, VMess, Trojan, Shadowsocks
+  proxy // SOCKS5 / HTTP(S)
+  vpn // WireGuard / OpenVPN
+  integration // Telegram MTProto
+}
+
+enum DeploymentMode {
+  external // panel manages configuration for a server hosted elsewhere
+  internal // runtime may run inside this deployment (requires verified capabilities)
+  unknown
+}
+
+model Protocol {
+  id String @id // stable id: "vless", "vmess", ...
+  displayName String @unique
+  category ProtocolCategory
+  deploymentMode DeploymentMode @default(unknown)
+  // Configuration schema URL for documentation; never executed.
+  schemaVersion String @default("1")
+  requiresInboundTcp Boolean @default(true)
+  requiresUdp Boolean @default(false)
+  requiresRoot Boolean @default(false)
+  docsUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  configurations ProtocolConfiguration[]
+  capabilities RuntimeCapability[]
+  healthChecks RuntimeHealthCheck[]
+
+  @@map("protocols")
+}
+
+// ------------------------------------------------------- authentication ---
+
+enum RoleName {
+  admin // full control
+  operator // manage clients/configurations, read diagnostics
+  viewer // read-only
+}
+
+model Role {
+  id String @id @default(cuid())
+  name RoleName @unique
+  description String?
+  createdAt DateTime @default(now())
+
+  users AdminUser[]
+
+  @@map("roles")
+}
+
+model AdminUser {
+  id String @id @default(cuid())
+  username String @unique @db.VarChar(64)
+  passwordHash String
+  roleId String
+  role Role @relation(fields: [roleId], references: [id])
+  isActive Boolean @default(true)
+  lastLoginAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime? // soft deletion
+
+  sessions Session[]
+  auditEvents AuditEvent[]
+  configVersions ConfigurationVersion[]
+
+  @@index([roleId])
+  @@map("admin_users")
+}
+
+model Session {
+  id String @id @default(cuid())
+  userId String
+  user AdminUser @relation(fields: [userId], references: [id])
+  // Only the SHA-256 of the opaque session token is stored. The raw token
+  // lives only in the HttpOnly cookie of the client that owns it.
+  tokenHash String @unique
+  csrfToken String
+  ip String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  revokedReason String?
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// --------------------------------------------------------------- clients ---
+
+enum TrafficEnforcement {
+  unavailable // quota recorded, cannot be enforced in this deployment
+  external // enforcement handled by the externally-hosted server
+  runtime // enforcement executed by an in-process runtime (rare)
+}
+
+enum CredentialKind {
+  vless_uuid
+  vmess_uuid
+  trojan_password
+  shadowsocks_password
+  socks_username
+  http_username
+  mtproto_secret
+  wireguard_keypair
+  openvpn_credentials
+}
+
+model Client {
+  id String @id @default(cuid())
+  label String @db.VarChar(120)
+  notes String? @db.Text
+  tags String[]
+  email String? @db.VarChar(160)
+  isDisabled Boolean @default(false)
+  // Configured limits. Enforcement truth is explicit — never implied.
+  expiresAt DateTime?
+  trafficQuotaBytes BigInt?
+  trafficEnforcement TrafficEnforcement @default(unavailable)
+  maxConnections Int? // only meaningful when runtime supports limits
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime? // soft deletion
+
+  credentials CredentialReference[]
+  subscriptions Subscription[]
+
+  @@index([isDisabled])
+  @@index([label])
+  @@index([expiresAt])
+  @@map("clients")
+}
+
+model CredentialReference {
+  id String @id @default(cuid())
+  clientId String
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  protocolId String
+  configurationId String?
+  configuration ProtocolConfiguration? @relation(fields: [configurationId], references: [id], onDelete: SetNull)
+  kind CredentialKind
+  // Human-safe, secretless display fields (e.g. publicKey, fingerprint).
+  displayData Json @default("{}")
+  // AES-256-GCM sealed payload; passphrase material never logged or exported.
+  sealedSecret String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  revokedAt DateTime? // revocation != deletion: keeps history + history export
+
+  @@index([clientId])
+  @@index([configurationId])
+  @@index([protocolId])
+  @@index([clientId, configurationId])
+  @@map("credential_references")
+}
+
+// --------------------------------------------------------- configurations ---
+
+model ProtocolConfiguration {
+  id String @id @default(cuid())
+  protocolId String
+  protocol Protocol @relation(fields: [protocolId], references: [id])
+  name String @db.VarChar(120)
+  schemaVersion String @default("1")
+  // Strictly validated, per-protocol JSON. No raw templating is ever executed.
+  config Json
+  isActive Boolean @default(true)
+  notes String? @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime? // soft deletion
+
+  versions ConfigurationVersion[]
+  credentials CredentialReference[]
+
+  @@unique([protocolId, name])
+  @@index([protocolId])
+  @@index([isActive])
+  @@map("protocol_configurations")
+}
+
+model ConfigurationVersion {
+  id String @id @default(cuid())
+  configurationId String
+  configuration ProtocolConfiguration @relation(fields: [configurationId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  config Json
+  schemaVersion String
+  changeNote String? @db.VarChar(500)
+  source String @default("panel") // "panel" | "import-xray" | "import-singbox" | "rollback"
+  createdById String?
+  createdBy AdminUser? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@unique([configurationId, versionNumber])
+  @@index([configurationId])
+  @@map("configuration_versions")
+}
+
+model ApplicationSetting {
+  key String @id
+  value Json
+  updatedAt DateTime @updatedAt
+  updatedById String?
+
+  @@map("application_settings")
+}
+
+// ----------------------------------------------------------- subscriptions ---
+
+enum SubscriptionFormat {
+  xray_uri // base64 lines of vless:// vmess:// trojan:// ss:// URIs
+  raw_uri // plain text URI lines (no base64 wrapper)
+  singbox_json // single sing-box client config JSON
+}
+
+model Subscription {
+  id String @id @default(cuid())
+  clientId String
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name String @db.VarChar(80)
+  format SubscriptionFormat @default(xray_uri)
+  // Only SHA-256 hash stored; raw token appears nowhere in the database.
+  tokenHash String @unique
+  tokenHint String @db.VarChar(12) // first chars for identification by admin
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+  revokedReason String?
+  lastAccessAt DateTime?
+  tokenRotatedAt DateTime?
+  accessCount Int @default(0)
+
+  @@index([clientId])
+  @@index([tokenHash])
+  @@map("subscriptions")
+}
+
+// -------------------------------------------------- runtime & diagnostics ---
+
+enum RuntimeState {
+  not_configured
+  configured
+  runtime_unavailable
+  awaiting_verification
+  starting
+  running_verified
+  degraded
+  stopped
+  error
+}
+
+model RuntimeCapability {
+  id String @id @default(cuid())
+  key String @unique // e.g. "xray.binary", "platform.udp", "proc.root"
+  available Boolean
+  detail Json @default("{}") // { reason, evidence, checkedAt, source }
+  protocolId String?
+  protocol Protocol? @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+  checkedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([protocolId])
+  @@map("runtime_capabilities")
+}
+
+model RuntimeHealthCheck {
+  id String @id @default(cuid())
+  protocolId String
+  configurationId String?
+  protocol Protocol @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+  state RuntimeState
+  outcome String @default("skipped") // "failed" | "passed" | "unsupported" | "skipped"
+  detail Json @default("{}")
+  latencyMs Int?
+  recordedAt DateTime @default(now())
+  expiresAt DateTime? // soft verification window: state must be re-verified
+
+  @@index([protocolId])
+  @@index([configurationId])
+  @@index([recordedAt])
+  @@map("runtime_health_checks")
+}
+
+model AuditEvent {
+  id String @id @default(cuid())
+  actorId String?
+  actor AdminUser? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorLabel String? // e.g. "system" or "anon" — for anonymous/system events
+  action String @db.VarChar(120) // "client.create", "auth.login_failed", ...
+  targetType String @db.VarChar(64)
+  targetId String @db.VarChar(64)
+  // Metadata must already be redacted by the caller. Caller contract enforced
+  // by the audit service helper, which re-runs redaction defensively.
+  meta Json @default("{}")
+  ip String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_events")
+}
