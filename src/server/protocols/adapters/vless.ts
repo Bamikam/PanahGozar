@@ -32,7 +32,7 @@ import type {
 const VlessConfigSchema = z.object({
   host: HostSchema,
   port: PortSchema,
-  transport: transportObject.default({}),
+  transport: transportObject.prefault({}),
   allowTransparent: z.boolean().default(false),
   totalAllowedBytes: z.number().int().nonnegative().optional(),
 });

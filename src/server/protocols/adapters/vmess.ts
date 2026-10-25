@@ -27,7 +27,7 @@ import type {
 const VmessConfigSchema = z.object({
   host: HostSchema,
   port: PortSchema,
-  transport: transportObject.default({}),
+  transport: transportObject.prefault({}),
   // alterId 0 is the modern recommendation (VMess AEAD).
   usersAlterId: z.number().int().min(0).max(65535).default(0),
   cipher: z.enum(["auto", "aes-128-gcm", "chacha20-poly1305", "none"]).default("auto"),
