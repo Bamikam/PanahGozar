@@ -100,7 +100,7 @@ export async function buildApp(
   app.decorate("services", {
     ...services,
     registry,
-    capabilities: makeCapabilities(db),
+    capabilities: makeCapabilities(db, registry),
   });
 
   // --- Security middleware --------------------------------------------------
@@ -272,7 +272,7 @@ export async function buildApp(
   return { app, cfg, db };
 }
 
-function makeCapabilities(db: PrismaClient) {
+function makeCapabilities(db: PrismaClient, registry: ProtocolRegistry) {
   return {
     async factorize() {
       const { collectEnvironmentFacts } = await import("./capabilities/runtime-detector.js");
@@ -282,17 +282,11 @@ function makeCapabilities(db: PrismaClient) {
       const { collectEnvironmentFacts, runCapabilitySweep } =
         await import("./capabilities/runtime-detector.js");
       const facts = await collectEnvironmentFacts();
-      return runCapabilitySweep(db, facts, [
-        "vless",
-        "vmess",
-        "trojan",
-        "shadowsocks",
-        "socks",
-        "http",
-        "mtproto",
-        "wireguard",
-        "openvpn",
-      ]);
+      return runCapabilitySweep(
+        db,
+        facts,
+        registry.list().map((adapter) => adapter.id)
+      );
     },
     async migrationsApplied(): Promise<boolean> {
       try {

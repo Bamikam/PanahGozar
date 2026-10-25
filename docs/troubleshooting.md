@@ -207,6 +207,38 @@ Keep-alive is best-effort. No application-level timer guarantees platform uptime
   available.
 - Keep one replica.
 
+## Render pre-deploy fails with `P1012: Environment variable not found: DATABASE_URL`
+
+The deploy fails in the **pre-deploy** phase (not the build) with:
+
+```
+Error code: P1012
+error: Environment variable not found: DATABASE_URL.
+```
+
+This is `prisma migrate deploy` from `pnpm release` (`preDeployCommand`) refusing to run. The
+build itself never needs `DATABASE_URL`: `prisma generate` validates the schema without
+resolving the datasource (verified with Prisma 5.22), so the pre-deploy command is simply the
+first step that connects to PostgreSQL — which means the web service's environment has no
+`DATABASE_URL` at all.
+
+Root cause: the web service was created manually (or has drifted) instead of being applied from
+[`render.yaml`](../render.yaml), which wires `DATABASE_URL` from the managed database with
+`fromDatabase`. Fix in the Render dashboard — never in Git:
+
+1. Confirm the PostgreSQL instance exists (Blueprint database `panahgozar-db`, same region as
+   the web service).
+2. Open the database → **Info** → copy the **Internal Database URL** (the private-network
+   connection string; its hostname is only resolvable inside Render's network).
+3. Web service → **Environment** → add `DATABASE_URL` with that value. Prefer re-applying the
+   Blueprint (**Blueprint → Apply**) when the service was created from it; Render then
+   re-syncs every variable, including the generated secrets.
+4. **Manual Deploy → Deploy latest commit** (no cache clear needed) and watch the pre-deploy
+   logs: `migrate deploy` then the seed must complete, after which `/api/ready` returns 200.
+
+The internal URL contains the database password. Do not paste it into logs, issues, or this
+repository; Render manages it as a service variable.
+
 ## Render-specific
 
 - Apply the Blueprint in the same region for web and database to use private networking.
